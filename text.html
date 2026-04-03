@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PDF & Text to Audio</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .app {
+      max-width: 740px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid #e0dfd8;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #1a1a1a;
+    }
+
+    .sub {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 1.75rem;
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #ccc;
+      border-radius: 12px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      background: #fafaf8;
+      transition: border-color 0.15s, background 0.15s;
+      margin-bottom: 1.25rem;
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: #888;
+      background: #f0efea;
+    }
+    .upload-icon { font-size: 36px; margin-bottom: 10px; }
+    .upload-label { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: #1a1a1a; }
+    .upload-hint { font-size: 13px; color: #888; }
+    #file-input { display: none; }
+
+    /* Text area */
+    .section-label {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 6px;
+      display: block;
+    }
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      resize: vertical;
+      padding: 10px 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #1a1a1a;
+      font-family: inherit;
+      margin-bottom: 1.25rem;
+    }
+    textarea:focus { outline: none; border-color: #888; }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 1.25rem;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 150px;
+    }
+    .ctrl-group label { font-size: 13px; color: #555; }
+    select {
+      padding: 8px 10px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #1a1a1a;
+      cursor: pointer;
+    }
+    select:focus { outline: none; border-color: #888; }
+    .slider-row { display: flex; align-items: center; gap: 8px; }
+    input[type=range] {
+      flex: 1;
+      accent-color: #333;
+      cursor: pointer;
+    }
+    .slider-val { font-size: 13px; font-weight: 600; min-width: 34px; text-align: right; color: #1a1a1a; }
+
+    /* Buttons */
+    .action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+    }
+    button {
+      padding: 9px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      background: transparent;
+      color: #1a1a1a;
+      transition: background 0.12s, transform 0.1s;
+      font-family: inherit;
+    }
+    button:hover { background: #f0efea; }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.38; cursor: not-allowed; }
+    button.primary {
+      background: #1a1a1a;
+      color: #fff;
+      border-color: transparent;
+    }
+    button.primary:hover { background: #333; }
+
+    /* Player */
+    .player {
+      background: #f5f5f0;
+      border-radius: 12px;
+      border: 1px solid #e0dfd8;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+      display: none;
+    }
+    .player.visible { display: block; }
+    .player-title { font-size: 13px; color: #555; margin-bottom: 10px; }
+    .player-controls { display: flex; align-items: center; gap: 14px; }
+    .play-btn {
+      width: 42px; height: 42px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0; padding: 0;
+      background: #1a1a1a; color: #fff; border: none;
+    }
+    .play-btn:hover { background: #333; }
+    .progress-wrap { flex: 1; }
+    input[type=range].progress-bar { width: 100%; }
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    /* Chunk info */
+    .chunk-info {
+      font-size: 12px;
+      color: #666;
+      background: #f5f5f0;
+      border-radius: 8px;
+      padding: 7px 12px;
+      margin-bottom: 1rem;
+      border: 1px solid #e0dfd8;
+      display: none;
+      word-break: break-word;
+    }
+    .chunk-info.visible { display: block; }
+
+    /* Status */
+    .status {
+      font-size: 13px;
+      color: #666;
+      min-height: 20px;
+    }
+    .status.error { color: #c0392b; }
+    .status.success { color: #27ae60; }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      body { background: #1a1a1a; color: #e8e8e0; }
+      .app { background: #242424; border-color: #383838; }
+      h1 { color: #e8e8e0; }
+      .sub, .section-label { color: #888; }
+      .upload-zone { background: #2a2a2a; border-color: #484848; }
+      .upload-zone:hover, .upload-zone.dragover { background: #303030; border-color: #666; }
+      .upload-label { color: #e8e8e0; }
+      textarea { background: #2a2a2a; border-color: #484848; color: #e8e8e0; }
+      textarea:focus { border-color: #888; }
+      select { background: #2a2a2a; border-color: #484848; color: #e8e8e0; }
+      button { border-color: #484848; color: #e8e8e0; }
+      button:hover { background: #303030; }
+      button.primary { background: #e8e8e0; color: #1a1a1a; }
+      button.primary:hover { background: #ccc; }
+      .play-btn { background: #e8e8e0; color: #1a1a1a; }
+      .play-btn:hover { background: #ccc; }
+      .player { background: #2a2a2a; border-color: #383838; }
+      .chunk-info { background: #2a2a2a; border-color: #383838; color: #aaa; }
+      .ctrl-group label { color: #aaa; }
+      .slider-val { color: #e8e8e0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <h1>📖 PDF & Text to Audio</h1>
+  <p class="sub">Upload a PDF book or paste text — listen with your preferred voice and speed.</p>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <div class="upload-icon">📄</div>
+    <div class="upload-label" id="upload-label">Drop a PDF here or click to browse</div>
+    <div class="upload-hint">Supports .pdf files — or paste text in the box below</div>
+    <input type="file" id="file-input" accept=".pdf,application/pdf">
+  </div>
+
+  <!-- Text area -->
+  <label class="section-label">Or paste / edit text directly</label>
+  <textarea id="text-input" placeholder="Paste any text here to convert to speech..."></textarea>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <label>Voice</label>
+      <select id="voice-select"></select>
+    </div>
+    <div class="ctrl-group">
+      <label>Speed — <span id="rate-out">1.0</span>x</label>
+      <div class="slider-row">
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1.0">
+        <span class="slider-val" id="rate-val">1.0x</span>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <label>Pitch — <span id="pitch-out">1.0</span></label>
+      <div class="slider-row">
+        <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1.0">
+        <span class="slider-val" id="pitch-val">1.0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chunk info -->
+  <div class="chunk-info" id="chunk-info"></div>
+
+  <!-- Actions -->
+  <div class="action-row">
+    <button class="primary" id="play-btn" onclick="startReading()">▶ Read aloud</button>
+    <button id="pause-btn" onclick="togglePause()" disabled>⏸ Pause</button>
+    <button id="stop-btn" onclick="stopReading()" disabled>■ Stop</button>
+    <button id="clear-btn" onclick="clearAll()">✕ Clear</button>
+  </div>
+
+  <!-- Player -->
+  <div class="player" id="player">
+    <div class="player-title" id="player-title">Reading...</div>
+    <div class="player-controls">
+      <button class="play-btn" id="mini-play" onclick="togglePause()">⏸</button>
+      <div class="progress-wrap">
+        <input type="range" class="progress-bar" id="progress-bar" min="0" value="0" step="1">
+        <div class="time-row">
+          <span id="time-current">0:00</span>
+          <span id="time-total">--</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status" id="status">No text loaded yet.</div>
+</div>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const $ = id => document.getElementById(id);
+  const synth = window.speechSynthesis;
+
+  let chunks = [];
+  let currentChunk = 0;
+  let paused = false;
+  let reading = false;
+  let elapsed = 0;
+  let startTime = 0;
+  let timerRef = null;
+
+  /* ── Voices ── */
+  function populateVoices() {
+    const sel = $('voice-select');
+    sel.innerHTML = '';
+    let voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
+    if (!voices.length) voices = synth.getVoices();
+    voices.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.name;
+      o.textContent = v.name + (v.lang ? ' (' + v.lang + ')' : '');
+      sel.appendChild(o);
+    });
+  }
+  populateVoices();
+  synth.onvoiceschanged = populateVoices;
+
+  /* ── Sliders ── */
+  $('rate').addEventListener('input', e => {
+    const v = parseFloat(e.target.value).toFixed(1);
+    $('rate-out').textContent = v;
+    $('rate-val').textContent = v + 'x';
+  });
+  $('pitch').addEventListener('input', e => {
+    const v = parseFloat(e.target.value).toFixed(1);
+    $('pitch-out').textContent = v;
+    $('pitch-val').textContent = v;
+  });
+
+  /* ── Drag & drop ── */
+  const dropZone = $('drop-zone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  $('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  /* ── PDF loading ── */
+  async function handleFile(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      setStatus('Please upload a valid PDF file.', 'error');
+      return;
+    }
+    $('upload-label').textContent = file.name;
+    setStatus('Extracting text from PDF...');
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(it => it.str).join(' ') + '\n\n';
+      }
+      $('text-input').value = text.trim();
+      setStatus(
+        'PDF loaded: ' + pdf.numPages + ' page(s), ' +
+        text.length.toLocaleString() + ' characters.',
+        'success'
+      );
+    } catch (err) {
+      console.error(err);
+      setStatus('Could not read PDF. Try pasting the text manually.', 'error');
+    }
+  }
+
+  /* ── Text chunking ── */
+  function chunkText(text, size = 220) {
+    const sentences = text.match(/[^.!?\n]+[.!?\n]*\s*/g) || [text];
+    const result = [];
+    let cur = '';
+    for (const s of sentences) {
+      if ((cur + s).length > size && cur) { result.push(cur.trim()); cur = s; }
+      else cur += s;
+    }
+    if (cur.trim()) result.push(cur.trim());
+    return result.filter(c => c.length > 0);
+  }
+
+  /* ── Reading ── */
+  function startReading() {
+    const text = $('text-input').value.trim();
+    if (!text) { setStatus('Please upload a PDF or paste some text first.', 'error'); return; }
+    stopReading();
+    chunks = chunkText(text);
+    currentChunk = 0;
+    reading = true;
+    paused = false;
+    $('pause-btn').disabled = false;
+    $('stop-btn').disabled = false;
+    $('play-btn').disabled = true;
+    $('player').classList.add('visible');
+    $('progress-bar').max = Math.max(0, chunks.length - 1);
+    $('time-total').textContent = chunks.length + ' chunks';
+    elapsed = 0;
+    startTimer();
+    speakChunk(0);
+  }
+
+  function speakChunk(idx) {
+    if (idx >= chunks.length) { finishReading(); return; }
+    synth.cancel();
+    const utt = new SpeechSynthesisUtterance(chunks[idx]);
+    const voices = synth.getVoices();
+    const chosen = voices.find(v => v.name === $('voice-select').value);
+    if (chosen) utt.voice = chosen;
+    utt.rate = parseFloat($('rate').value);
+    utt.pitch = parseFloat($('pitch').value);
+
+    utt.onstart = () => {
+      $('progress-bar').value = idx;
+      $('player-title').textContent = 'Reading chunk ' + (idx + 1) + ' of ' + chunks.length;
+      updateChunkInfo(idx);
+      setStatus('Speaking chunk ' + (idx + 1) + ' / ' + chunks.length + '...');
+    };
+    utt.onend = () => {
+      if (!paused && reading) { currentChunk++; speakChunk(currentChunk); }
+    };
+    utt.onerror = () => {
+      if (reading) { currentChunk++; speakChunk(currentChunk); }
+    };
+    synth.speak(utt);
+  }
+
+  function togglePause() {
+    if (!reading) return;
+    if (paused) {
+      synth.resume();
+      paused = false;
+      $('pause-btn').textContent = '⏸ Pause';
+      $('mini-play').textContent = '⏸';
+      startTimer();
+      setStatus('Resumed.');
+    } else {
+      synth.pause();
+      paused = true;
+      $('pause-btn').textContent = '▶ Resume';
+      $('mini-play').textContent = '▶';
+      stopTimer();
+      setStatus('Paused.');
+    }
+  }
+
+  function stopReading() {
+    synth.cancel();
+    reading = false; paused = false;
+    $('pause-btn').disabled = true; $('pause-btn').textContent = '⏸ Pause';
+    $('stop-btn').disabled = true;
+    $('play-btn').disabled = false;
+    $('mini-play').textContent = '▶';
+    stopTimer(); elapsed = 0;
+    $('player').classList.remove('visible');
+    $('chunk-info').classList.remove('visible');
+    setStatus('Stopped.');
+  }
+
+  function finishReading() {
+    reading = false; paused = false;
+    $('pause-btn').disabled = true;
+    $('stop-btn').disabled = true;
+    $('play-btn').disabled = false;
+    stopTimer();
+    $('player-title').textContent = 'Done reading!';
+    $('mini-play').textContent = '▶';
+    setStatus('Finished reading all ' + chunks.length + ' chunks.', 'success');
+  }
+
+  function clearAll() {
+    stopReading();
+    $('text-input').value = '';
+    $('upload-label').textContent = 'Drop a PDF here or click to browse';
+    $('file-input').value = '';
+    setStatus('Cleared.');
+  }
+
+  /* ── Progress bar seek ── */
+  $('progress-bar').addEventListener('input', e => {
+    if (!reading) return;
+    currentChunk = parseInt(e.target.value);
+    speakChunk(currentChunk);
+  });
+
+  /* ── Chunk info ── */
+  function updateChunkInfo(idx) {
+    const el = $('chunk-info');
+    if (!chunks.length) { el.classList.remove('visible'); return; }
+    const preview = (chunks[idx] || '').substring(0, 100);
+    el.classList.add('visible');
+    el.textContent = 'Chunk ' + (idx + 1) + '/' + chunks.length + ': "' +
+      preview + (preview.length >= 100 ? '…' : '') + '"';
+  }
+
+  /* ── Timer ── */
+  function startTimer() {
+    startTime = Date.now() - elapsed * 1000;
+    timerRef = setInterval(() => {
+      elapsed = Math.round((Date.now() - startTime) / 1000);
+      $('time-current').textContent = formatTime(elapsed);
+    }, 1000);
+  }
+  function stopTimer() { clearInterval(timerRef); }
+  function formatTime(s) {
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  /* ── Status ── */
+  function setStatus(msg, type) {
+    const el = $('status');
+    el.textContent = msg;
+    el.className = 'status' + (type ? ' ' + type : '');
+  }
+</script>
+</body>
+</html>
